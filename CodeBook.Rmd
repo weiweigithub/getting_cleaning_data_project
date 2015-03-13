@@ -1,0 +1,194 @@
+---
+title: "Getting and Cleaning Data Project CodeBook"
+output: html_document
+---
+
+## Project Description
+The purpose of this project is to demonstrate your ability to collect, work with, and clean a data set. The goal is to prepare tidy data that can be used for later analysis.  
+
+The dataset for the project can be downloaded at: https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip.
+
+One of the most exciting areas in all of data science right now is wearable computing - see for example [this paper](http://www.insideactivitytracking.com/data-science-activity-tracking-and-the-battle-for-the-worlds-top-sports-brand/). Companies like Fitbit, Nike, and Jawbone Up are racing to develop the most advanced algorithms to attract new users. The given dataset represents data collected from the accelerometers from the Samsung Galaxy S smartphone.  
+
+### It is required that following are submitted for peer evaluation:  
+
+1. A tidy data set as described below.  
+2. A link to a Github repository with your script for performing the analysis.  
+3. A code book that describes the variables, the data, and any transformations or work that are performed to clean up the data called CodeBook.md.  
+4. A README.md should also be inlcuded.  
+
+
+### You should create one R script called run_analysis.R that does the following:  
+
+1. Merges the training and the test sets to create one data set.  
+2. Extracts only the measurements on the mean and standard deviation for each measurement.  
+3. Uses descriptive activity names to name the activities in the data set.  
+4. Appropriately labels the data set with descriptive activity names.  
+5. Creates a second, independent tidy data set with the average of each variable for each activity and each subject.  
+
+### Step 1: Merges the traning and the test sets to create on data set 
+
+##### 1. Download the and unzip the data set using the given URL into local directory with name getcleanproject
+
+```{r}
+library(dplyr)
+fileUrl <- "http://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
+download.file(fileUrl, destfile="./rawdataset.zip")
+unzip(zipfile="./rawdataset.zip", exdir=".")
+```
+
+#####2. It was discovered that the unzipped files are in the sub folder titled as "UCI HAR Dataset" in the working directory. The working directory is set to the directory where the data files are. 
+
+```{r}
+newwd<-paste(getwd(), "/UCI HAR Dataset", sep="")
+setwd(newwd)
+```
+
+#####3. Check the content of the downloaded files. 
+
+```{r}
+list.files(newwd, recursive=TRUE)
+```
+Examining of the data file suggest the following:
+1. There is one folder for traing data and one folder for test data.  
+2. The actual measurement data is in: subject_test.txt, subject_train.txt, X_text.txt, X_train.txt, y_test.txt,  y_train.txt.  
+3. There are 30 subjects (experiment participants).  
+4. The subjects are monitored in 6 modes, the name of the 6 modes is available in activity_labels.  
+5. The collected data is on a wide range of "features". There are 561 different features. All feature names start with either "t" for time or "f" for frequency. The collected signals are measured with a set of variables such as mean and standard deviation.  
+
+#####4. Read in data to be merged.  
+The data on subjects (who are the participants of the experiment), the activities (basically 6 different modes when the measurements are taken)
+and the features (561 measured variables used in the expriment) are read from corresponding files inlcuding both training set and test set
+Notice that the orginal headers are NOT read, because they are going to be renamed more appropriately later.  
+
+ 
+Read the activity data
+```{r}
+testActivity<-read.table("./test/y_test.txt", header=FALSE)
+trainActivity<-read.table("./train/y_train.txt", header=FALSE)
+```
+
+Read the subject data  
+
+```{r}
+testSubject<-read.table("./test/subject_test.txt", header = FALSE)
+trainSubject<-read.table("./train/subject_train.txt", header = FALSE)
+```
+
+Read the feature data  
+
+```{r}
+testFeature<-read.table("./test/X_test.txt", header =FALSE) 
+trainFeature<-read.table("./train/X_train.txt", header = FALSE) 
+```
+
+The read data is looked into by:
+```{r}
+dim(testActivity)
+dim(trainActivity)
+dim(testSubject)
+dim(trainSubject)
+dim(testFeature)
+dim(trainFeature)
+```
+It is discovered that:  
+1). testActivity has dimension 2947 by 1  
+2). trainActivity has dimension 7352 by 1  
+3). testSubject has dimension 2947 by 1  
+4). trainSubject has dimension 7352 by 1  
+5). testFeature has dimension 2947 by 561  
+6). trainFeature has dimension 7352 by 561  
+In addition, str() is also used on each read dataset to find connection between data sets.  
+Put it together, we have 30 subjects who are measured on 561 variables in 6 modes. Therefore, if we merge the test set and the train set, we should expect to have a dataset has dimension of 10299*563 (561 plus subject and activity).  
+ 
+
+#####5. Merge the data sets
+
+Activity, subject, and feature data from test set and train set are combined into one. 
+```{r}
+allActivity <- rbind(testActivity, trainActivity)
+allSubject<-rbind(testSubject, trainSubject)
+allFeature<-rbind(testFeature, trainFeature)
+```
+
+For the subject data set, name the column "subject". For the activity data set, name the column "activity".
+```{r}
+colnames(allSubject)<-c("subject")
+colnames(allActivity)<-c("activity")
+```
+
+Next is to get columns in the merged feature dataset properly named. The source is from the features.txt file. 
+```{r}
+features<-read.table("./features.txt", header=FALSE)
+colnames(allFeature)<-features$V2
+```
+
+Now combine the subject, activity, and the features data into one file by combining by the columns. The dim() confirms. 
+```{r}
+merged<-cbind(cbind(allActivity,allSubject), allFeature)
+dim(merged)
+```
+
+### Step 2: Extracts only the measurements on the mean and standard deviation for each measurement
+
+Not all the 561 features are needed. Only the average and standard deviation features are needed. So find all the required features. 
+```{r}
+featurenames<- features$V2
+meanfeatures<-featurenames[grep("mean\\()", featurenames)]
+stdfeatures<-featurenames[grep("std\\()", featurenames)]
+```
+
+The mean and std plus the subject, activity are combined into one-requirednames. 
+```{r}
+requirednames<-c("subject", "activity")
+for(i in 1:length(meanfeatures)) requirednames[i+2]=as.character(meanfeatures[[i]])
+for(i in 1:length(stdfeatures)) requirednames[i+2+length(stdfeatures)]=as.character(stdfeatures[[i]])
+```
+
+The obtained list of required features are used to get the proper subset from the extracted data file. 
+```{r}
+extracted<-subset(merged, select = requirednames)
+```
+
+### Step 3: Use descriptive activity names to name the activities in the data set
+
+Originally, the activity column contains integer of 1 to 6. The following lines of code convert the numbers into corresponding modes in words. 
+```{r}
+activities<-read.table("./activity_labels.txt", header=FALSE)
+
+for (i in 1:nrow(activities)){
+        extracted$activity<-gsub(i, activities[i,2], extracted$activity)
+}
+
+extracted$activity<-factor(extracted$activity)
+```
+
+### Step 4: Appropriately labels the data set with descriptive activity names
+
+Based on the study of the data files and information from README, columns are more properly labeled.
+```{r}
+names(extracted)<-gsub("^t", "time", names(extracted))
+names(extracted)<-gsub("^f", "frequency", names(extracted))
+names(extracted)<-gsub("Acc", "Accelerometer", names(extracted))
+names(extracted)<-gsub("Gyro", "Gyroscope", names(extracted))
+names(extracted)<-gsub("Mag", "Magnitude", names(extracted))
+names(extracted)<-gsub("BodyBody", "Body", names(extracted))
+```
+
+### Step 5: Create a second, independent tidy data set with the average of each variable for each activity and each subject
+
+Calculate the mean of extracted features by subject and activity. Since there are 30 subjects and 6 modes, there should be 30*6=180 rows.  
+```{r}
+final<-aggregate(extracted[,3:ncol(extracted)], by=list(subject = extracted$subject,activity=extracted$activity), mean)
+```
+
+```{r}
+tidy<-arrange(final, subject, activity)
+dim(tidy)
+```
+
+```{r}
+write.table(tidy, file="tidydata.txt", row.name=FALSE)
+```
+
+
